@@ -6,6 +6,7 @@ const Razorpay = require('razorpay');
 const prisma = require('../config/database');
 const { sendOrderConfirmationEmail } = require('../utils/email');
 const AppError = require('../utils/AppError');
+const { webhookIdempotency } = require('../config/redis');
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -126,8 +127,6 @@ const verifyPayment = async (req, res, next) => {
 
 // Razorpay Webhook Handler - WITH IDEMPOTENCY
 const handleWebhook = async (req, res, next) => {
-    const { webhookIdempotency } = require('../config/redis');
-
     try {
         const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 

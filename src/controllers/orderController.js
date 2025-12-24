@@ -2,6 +2,7 @@ const prisma = require('../config/database');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const AppError = require('../utils/AppError');
+const { codLimits } = require('../config/redis');
 
 // Get user orders
 const getOrders = async (req, res, next) => {
@@ -116,7 +117,6 @@ const createOrder = async (req, res, next) => {
 
     // COD ABUSE PREVENTION - Check limits early
     if (paymentMethod === 'COD') {
-      const { codLimits } = require('../config/redis');
       // We'll calculate total after variant lookup, but do early check for active orders
       const activeOrders = await codLimits.getActiveOrderCount(userId);
       if (activeOrders >= codLimits.MAX_ACTIVE_ORDERS) {

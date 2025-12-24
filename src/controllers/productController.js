@@ -2,17 +2,8 @@ const prisma = require('../config/database');
 const logger = require('../config/logger');
 const AppError = require('../utils/AppError');
 
-// Optional Redis import - gracefully handle if not available
-let cache, CACHE_KEYS, CACHE_TTL;
-try {
-  const redis = require('../config/redis');
-  cache = redis.cache;
-  CACHE_KEYS = redis.CACHE_KEYS;
-  CACHE_TTL = redis.CACHE_TTL;
-} catch (error) {
-  logger.warn('Redis not configured, caching disabled');
-  cache = null;
-}
+// Redis Import
+const { cache, CACHE_KEYS, CACHE_TTL } = require('../config/redis');
 
 // Get all products
 const getProducts = async (req, res, next) => {
