@@ -16,11 +16,14 @@ const redis = new Redis({
 });
 
 // Connection events
+// Connection events
 redis.on('connect', () => {
+    console.log('✅ Redis connected successfully');
     logger.info('Redis: Connected successfully');
 });
 
 redis.on('error', (err) => {
+    console.error('❌ Redis connection error:', err);
     logger.error('Redis: Connection error', err);
 });
 
