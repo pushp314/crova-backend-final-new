@@ -12,7 +12,7 @@ const redis = new Redis({
     password: process.env.REDIS_PASSWORD || undefined,
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
-    lazyConnect: true,
+    lazyConnect: false,
 });
 
 // Connection events
