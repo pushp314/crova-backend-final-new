@@ -8,9 +8,11 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: '/api/auth/google/callback', // Internal API callback
+      callbackURL: process.env.NODE_ENV === 'production'
+        ? 'https://api.crova.in/api/auth/google/callback'
+        : '/api/auth/google/callback',
       scope: ['profile', 'email'],
-      proxy: true, // Required for Nginx SSL 
+      proxy: true,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
