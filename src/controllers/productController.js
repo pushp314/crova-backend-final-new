@@ -179,6 +179,12 @@ const getProduct = async (req, res, next) => {
         variants: true,
         images: {
           orderBy: { position: 'asc' }
+        },
+        collections: {
+          select: {
+            id: true,
+            title: true
+          }
         }
       }
     });
@@ -225,7 +231,10 @@ const createProduct = async (req, res, next) => {
         comparePrice: req.body.comparePrice ? parseFloat(req.body.comparePrice) : null,
         category,
         stock: parseInt(stock),
-        images
+        images,
+        collections: req.body.collections ? {
+          connect: req.body.collections.map(id => ({ id }))
+        } : undefined
       },
       include: {
         category: {
@@ -291,6 +300,12 @@ const updateProduct = async (req, res, next) => {
     if (req.files && req.files.length > 0) {
       const newImages = req.files.map(file => `/uploads/products/${file.filename}`);
       updateData.images = [...existingProduct.images, ...newImages];
+    }
+
+    if (req.body.collections) {
+      updateData.collections = {
+        set: req.body.collections.map(id => ({ id }))
+      };
     }
 
     const product = await prisma.product.update({
