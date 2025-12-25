@@ -7,7 +7,7 @@ const AppError = require('../utils/AppError');
 const updateCollection = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { title, description, image, theme, textColor, slug } = req.body;
+        const { title, description, image, theme, textColor, slug, products } = req.body;
 
         const updateData = {};
         if (title) updateData.title = title;
@@ -17,9 +17,21 @@ const updateCollection = async (req, res, next) => {
         if (textColor) updateData.textColor = textColor;
         if (slug) updateData.slug = slug;
 
+        if (products) {
+            // products is array of IDs
+            updateData.products = {
+                set: products.map(id => ({ id }))
+            };
+        }
+
         const collection = await prisma.collection.update({
             where: { id },
-            data: updateData
+            data: updateData,
+            include: {
+                products: {
+                    select: { id: true, name: true }
+                }
+            }
         });
 
         res.json({ success: true, data: { collection } });
@@ -30,7 +42,7 @@ const updateCollection = async (req, res, next) => {
 
 const createCollection = async (req, res, next) => {
     try {
-        const { title, description, image, theme, textColor } = req.body;
+        const { title, description, image, theme, textColor, products } = req.body;
 
         // Simple slug generator if not provided
         const slug = req.body.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -48,6 +60,9 @@ const createCollection = async (req, res, next) => {
                 image,
                 theme,
                 textColor,
+                products: products ? {
+                    connect: products.map(id => ({ id }))
+                } : undefined
             },
         });
 

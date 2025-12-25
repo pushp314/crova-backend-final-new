@@ -18,9 +18,12 @@ const getProducts = async (req, res, next) => {
     const sortOrder = req.query.sortOrder === 'asc' ? 'asc' : 'desc';
 
     // Build where clause
-    const where = {
-      isActive: true
-    };
+    const where = {};
+
+    // Only filter by isActive if includeInactive is NOT true
+    if (req.query.includeInactive !== 'true') {
+      where.isActive = true;
+    }
 
     // Add price filter only if provided
     if (req.query.minPrice || req.query.maxPrice) {
