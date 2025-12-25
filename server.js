@@ -18,6 +18,9 @@ require('./src/config/passport');
 
 const app = express();
 
+// Trust Nginx Proxy (Required for proper IP and Protocol detection)
+app.set('trust proxy', 1);
+
 // --- LOGGING ---
 app.use(morgan('combined', { stream: logger.stream }));
 

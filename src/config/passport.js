@@ -10,6 +10,7 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       callbackURL: '/api/auth/google/callback', // Internal API callback
       scope: ['profile', 'email'],
+      proxy: true, // Required for Nginx SSL 
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
