@@ -13,6 +13,7 @@ const redis = new Redis({
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
     lazyConnect: false,
+    enableOfflineQueue: false, // Fail immediately if not connected, allowing DB fallback
 });
 
 // Connection events
