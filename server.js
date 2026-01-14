@@ -18,33 +18,6 @@ require('./src/config/passport');
 
 const app = express();
 
-// Trust Nginx Proxy (Required for proper IP and Protocol detection)
-app.set('trust proxy', 1);
-
-// --- LOGGING ---
-app.use(morgan('combined', { stream: logger.stream }));
-
-// --- SECURITY MIDDLEWARE ---
-
-// Helmet security headers
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
-        fontSrc: ["'self'", 'fonts.gstatic.com'],
-        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
-        scriptSrc: ["'self'", "'unsafe-inline'", 'checkout.razorpay.com'],
-        frameSrc: ["'self'", 'api.razorpay.com'],
-        connectSrc: ["'self'", 'api.razorpay.com'],
-      },
-    },
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
-
 // Enable CORS
 const allowedOrigins = [
   process.env.CLIENT_URL,
@@ -81,7 +54,40 @@ const corsOptions = {
   exposedHeaders: ['set-cookie'],
   maxAge: 86400, // 24 hours cache for preflight
 };
+
+// Trust Nginx Proxy (Required for proper IP and Protocol detection)
+app.set('trust proxy', 1);
+
+// Apply CORS before anything else
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
+
+
+// --- LOGGING ---
+app.use(morgan('combined', { stream: logger.stream }));
+
+// --- SECURITY MIDDLEWARE ---
+
+// Helmet security headers
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'fonts.googleapis.com'],
+        fontSrc: ["'self'", 'fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        scriptSrc: ["'self'", "'unsafe-inline'", 'checkout.razorpay.com'],
+        frameSrc: ["'self'", 'api.razorpay.com'],
+        connectSrc: ["'self'", 'api.razorpay.com'],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
+
+// Enable CORS checks (configuration moved to top)
 
 // Cookie parser (for refresh tokens)
 app.use(cookieParser());
