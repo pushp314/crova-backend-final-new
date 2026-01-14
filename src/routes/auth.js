@@ -37,18 +37,28 @@ router.get('/me', authenticateToken, getMe);
 router.post('/change-password', authenticateToken, changePassword);
 
 // Google OAuth routes
-router.get(
-  '/google',
-  passport.authenticate('google', {
-    scope: ['profile', 'email'],
-  })
-);
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  router.get(
+    '/google',
+    passport.authenticate('google', {
+      scope: ['profile', 'email'],
+    })
+  );
 
-router.get(
-  '/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login', session: false }),
-  googleCallback
-);
+  router.get(
+    '/google/callback',
+    passport.authenticate('google', { failureRedirect: '/login', session: false }),
+    googleCallback
+  );
+} else {
+  // Return useful error if configured but keys missing
+  router.get('/google', (req, res) => {
+    res.status(503).json({
+      success: false,
+      message: 'Google Login is currently disabled. Server configuration missing.'
+    });
+  });
+}
 
 // Password reset routes
 router.post(
