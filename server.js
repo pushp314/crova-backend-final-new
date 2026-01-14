@@ -61,12 +61,19 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
 
+    // Check specific allowed origins
     if (allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      logger.warn(`CORS blocked origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      return callback(null, true);
     }
+
+    // Allow all crova.in subdomains (https)
+    const crovaRegex = /^https:\/\/(.*\.)?crova\.in$/;
+    if (crovaRegex.test(origin)) {
+      return callback(null, true);
+    }
+
+    logger.warn(`CORS blocked origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -80,8 +87,8 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 
 // Body Parsers
-app.use(express.json({ limit: '10mb' })); // Increased for base64 images
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' })); // Increased for high-res images
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Initialize Passport
 app.use(passport.initialize());
