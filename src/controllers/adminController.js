@@ -541,6 +541,51 @@ const adminSearch = async (req, res, next) => {
   }
 };
 
+// ============================================
+// AUDIT LOGS
+// ============================================
+
+const getAuditLogs = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+    const { action, userName, resource } = req.query;
+
+    const where = {};
+    if (action) where.action = action;
+    if (resource) where.resource = resource;
+    if (userName) {
+      where.userName = { contains: userName, mode: 'insensitive' };
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.auditLog.count({ where })
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        logs,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit)
+        }
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getSalesAnalytics,
@@ -554,4 +599,5 @@ module.exports = {
   getLowStockProducts,
   getCustomDesignOrders,
   adminSearch,
+  getAuditLogs
 };

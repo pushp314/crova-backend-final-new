@@ -6,7 +6,8 @@ const {
   updateProduct,
   deleteProduct,
   getFeaturedProducts,
-  searchProducts
+  searchProducts,
+  bulkAction
 } = require('../controllers/productController');
 const { authenticateToken, requireAdmin, optionalAuth } = require('../middleware/auth');
 const { validateProduct, validateObjectId, validatePagination } = require('../middleware/validation');
@@ -19,9 +20,15 @@ const router = express.Router();
 router.get('/', validatePagination, cacheMiddleware(300), getProducts); // Cache for 5 mins
 router.get('/featured', cacheMiddleware(300), getFeaturedProducts);
 router.get('/search', searchProducts); // Don't cache search usually
-router.get('/:id', optionalAuth, cacheMiddleware(300), getProduct); // Supports ID or slug
+router.get('/:id', optionalAuth, cacheMiddleware(300), getProduct);
 
 // Admin routes
+router.post('/bulk-action',
+  authenticateToken,
+  requireAdmin,
+  invalidateCache('route:/api/*/products*'),
+  bulkAction
+);
 router.post('/',
   authenticateToken,
   requireAdmin,

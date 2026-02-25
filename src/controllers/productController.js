@@ -3,6 +3,7 @@ const logger = require('../config/logger');
 const AppError = require('../utils/AppError');
 const { getFilesUrls } = require('../utils/fileUpload');
 const { generateSlug } = require('../utils/helpers');
+const { logAction } = require('../utils/auditLogger');
 
 // Redis Import
 const { cache, CACHE_KEYS, CACHE_TTL } = require('../config/redis');
@@ -275,6 +276,17 @@ const createProduct = async (req, res, next) => {
       logger.debug('Invalidated products cache');
     }
 
+    // Log the action
+    await logAction({
+      action: 'CREATE_PRODUCT',
+      resource: 'Product',
+      resourceId: product.id,
+      userId: req.user?.id,
+      userName: req.user?.name || req.user?.email,
+      details: { name: product.name, price: product.price },
+      ipAddress: req.ip
+    });
+
     res.status(201).json({
       success: true,
       message: 'Product created successfully',
@@ -393,6 +405,17 @@ const updateProduct = async (req, res, next) => {
       await cache.delByPattern('products:*');
       logger.debug(`Invalidated cache for product ${id}`);
     }
+
+    // Log the action
+    await logAction({
+      action: 'UPDATE_PRODUCT',
+      resource: 'Product',
+      resourceId: product.id,
+      userId: req.user?.id,
+      userName: req.user?.name || req.user?.email,
+      details: { name: product.name, updatedFields: Object.keys(updateData) },
+      ipAddress: req.ip
+    });
 
     res.json({
       success: true,
@@ -531,6 +554,68 @@ const searchProducts = async (req, res, next) => {
   }
 };
 
+// Bulk Actions (Admin only)
+const bulkAction = async (req, res, next) => {
+  try {
+    const { ids, action } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return next(new AppError('No product IDs provided', 400));
+    }
+
+    let result;
+    switch (action) {
+      case 'activate':
+        result = await prisma.product.updateMany({
+          where: { id: { in: ids } },
+          data: { isActive: true }
+        });
+        break;
+      case 'deactivate':
+        result = await prisma.product.updateMany({
+          where: { id: { in: ids } },
+          data: { isActive: false }
+        });
+        break;
+      case 'delete':
+        // Soft delete
+        result = await prisma.product.updateMany({
+          where: { id: { in: ids } },
+          data: { isActive: false }
+        });
+        break;
+      default:
+        return next(new AppError('Invalid bulk action', 400));
+    }
+
+    // Invalidate caches
+    if (cache) {
+      await cache.delByPattern('products:*');
+      for (const id of ids) {
+        await cache.del(`product:${id}`);
+      }
+    }
+
+    // Log the action
+    await logAction({
+      action: `BULK_${action.toUpperCase()}_PRODUCT`,
+      resource: 'Product',
+      userId: req.user?.id,
+      userName: req.user?.name || req.user?.email,
+      details: { count: ids.length, ids },
+      ipAddress: req.ip
+    });
+
+    res.json({
+      success: true,
+      message: `Bulk action '${action}' completed successfully for ${ids.length} products`,
+      data: { count: result.count }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getProducts,
   getProduct,
@@ -538,5 +623,6 @@ module.exports = {
   updateProduct,
   deleteProduct,
   getFeaturedProducts,
-  searchProducts
+  searchProducts,
+  bulkAction
 };

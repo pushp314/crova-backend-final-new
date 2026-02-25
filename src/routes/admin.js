@@ -15,6 +15,7 @@ const {
   getLowStockProducts,
   getCustomDesignOrders,
   adminSearch,
+  getAuditLogs
 } = require('../controllers/adminController');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
@@ -43,5 +44,8 @@ router.delete('/users/:id', deleteUser);
 
 // Product analytics
 router.get('/products/low-stock', getLowStockProducts);
+
+// Audit Logs
+router.get('/audit-logs', getAuditLogs);
 
 module.exports = router;

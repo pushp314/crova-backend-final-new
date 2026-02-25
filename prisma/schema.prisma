@@ -398,3 +398,23 @@ model Settings {
   razorpayEnabled       Boolean @default(true)
   codEnabled            Boolean @default(true)
 }
+
+/////////////////////////////////////////////////
+// LOGGING
+/////////////////////////////////////////////////
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   // e.g., "CREATE_PRODUCT", "UPDATE_ORDER"
+  resource    String   // e.g., "Product", "Order"
+  resourceId  String?
+  userId      String?
+  userName    String?
+  details     Json?    // Stores the changes or relevant data
+  ipAddress   String?
+  
+  createdAt   DateTime @default(now())
+
+  @@index([action])
+  @@index([resource])
+}
