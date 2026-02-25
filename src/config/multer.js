@@ -13,8 +13,10 @@ if (!fs.existsSync(bannersDir)) {
     fs.mkdirSync(bannersDir, { recursive: true });
 }
 
+const { r2Storage } = require('./r2');
+
 // Configure storage for Banners
-const bannerStorage = multer.diskStorage({
+const localBannerStorage = multer.diskStorage({
     destination: (req, file, cb) => {
         cb(null, bannersDir);
     },
@@ -34,7 +36,7 @@ const fileFilter = (req, file, cb) => {
 };
 
 const uploadBanner = multer({
-    storage: bannerStorage,
+    storage: process.env.R2_ACCESS_KEY_ID ? r2Storage : localBannerStorage,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB limit
     },

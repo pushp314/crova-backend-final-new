@@ -4,6 +4,7 @@
 const prisma = require('../config/database');
 const { deleteFile } = require('../config/multer');
 const AppError = require('../utils/AppError');
+const { getFileUrl } = require('../utils/fileUpload');
 
 // Get all banners (public)
 const getBanners = async (req, res) => {
@@ -61,7 +62,7 @@ const createBanner = async (req, res, next) => {
             return next(new AppError('Image is required', 400));
         }
 
-        const image = `/uploads/banners/${req.file.filename}`;
+        const image = getFileUrl(req.file, 'banners');
 
         const banner = await prisma.banner.create({
             data: {
@@ -124,7 +125,7 @@ const updateBanner = async (req, res, next) => {
 
         // Handle image update
         if (req.file) {
-            updateData.image = `/uploads/banners/${req.file.filename}`;
+            updateData.image = getFileUrl(req.file, 'banners');
 
             // Delete old image
             if (existingBanner.image) {

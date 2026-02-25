@@ -9,7 +9,7 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 // Configure storage
-const storage = multer.diskStorage({
+const localDiskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     let uploadPath = uploadDir;
 
@@ -38,6 +38,9 @@ const storage = multer.diskStorage({
   }
 });
 
+// Force local disk storage
+const storage = localDiskStorage;
+
 // File filter
 const fileFilter = (req, file, cb) => {
   // Check file type
@@ -62,6 +65,7 @@ const upload = multer({
 const uploadProductImages = upload.array('productImages', 5);
 const uploadCategoryImage = upload.single('categoryImage');
 const uploadAvatar = upload.single('avatar');
+const uploadDesignImages = upload.array('images', 10);
 
 // Error handling middleware for multer
 const handleUploadError = (err, req, res, next) => {
@@ -101,5 +105,6 @@ module.exports = {
   uploadProductImages,
   uploadCategoryImage,
   uploadAvatar,
+  uploadDesignImages,
   handleUploadError
 };

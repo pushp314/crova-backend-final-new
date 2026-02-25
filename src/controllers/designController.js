@@ -1,13 +1,14 @@
 const prisma = require('../config/database');
 const logger = require('../config/logger');
 const AppError = require('../utils/AppError');
+const { getFilesUrls } = require('../utils/fileUpload');
 
 const submitInquiry = async (req, res, next) => {
     try {
         const { name, email, phone, description } = req.body;
         const files = req.files || [];
 
-        const images = files.map(file => `/uploads/designs/${file.filename}`);
+        const images = getFilesUrls(files, 'designs');
 
         const inquiry = await prisma.designInquiry.create({
             data: {

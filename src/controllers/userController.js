@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../config/database');
 const AppError = require('../utils/AppError');
+const { getFileUrl } = require('../utils/fileUpload');
 
 // Get user profile
 const getProfile = async (req, res, next) => {
@@ -59,7 +60,7 @@ const updateProfile = async (req, res, next) => {
 
     // Handle avatar upload
     if (req.file) {
-      updateData.avatar = `/uploads/avatars/${req.file.filename}`;
+      updateData.avatar = getFileUrl(req.file, 'avatars');
     }
 
     // Update user

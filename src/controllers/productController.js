@@ -1,6 +1,8 @@
 const prisma = require('../config/database');
 const logger = require('../config/logger');
 const AppError = require('../utils/AppError');
+const { getFilesUrls } = require('../utils/fileUpload');
+const { generateSlug } = require('../utils/helpers');
 
 // Redis Import
 const { cache, CACHE_KEYS, CACHE_TTL } = require('../config/redis');
@@ -224,19 +226,35 @@ const createProduct = async (req, res, next) => {
       return next(new AppError('Category not found', 400));
     }
 
-    const images = req.files ? req.files.map(file => `/uploads/products/${file.filename}`) : [];
+    const images = getFilesUrls(req.files, 'products');
+    const slug = generateSlug(name);
 
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
+        slug: slug,
         description: description.trim(),
         price: parseFloat(price),
         comparePrice: req.body.comparePrice ? parseFloat(req.body.comparePrice) : null,
-        category,
-        stock: parseInt(stock),
-        images,
+        categoryId: category,
+        variants: {
+          create: {
+            size: 'Free Size', // Default variant
+            color: 'Default',
+            stock: parseInt(stock) || 0
+          }
+        },
+        images: {
+          create: images.map((url, index) => ({
+            imagePath: url,
+            position: index,
+            isPrimary: index === 0
+          }))
+        },
         collections: req.body.collections ? {
-          connect: req.body.collections.map(id => ({ id }))
+          connect: Array.isArray(req.body.collections)
+            ? req.body.collections.map(id => ({ id }))
+            : [{ id: req.body.collections }]
         } : undefined
       },
       include: {
@@ -245,7 +263,9 @@ const createProduct = async (req, res, next) => {
             id: true,
             name: true
           }
-        }
+        },
+        images: true,
+        variants: true
       }
     });
 
@@ -290,24 +310,65 @@ const updateProduct = async (req, res, next) => {
     }
 
     const updateData = {};
-    if (name) updateData.name = name.trim();
+    if (name) {
+      updateData.name = name.trim();
+      updateData.slug = generateSlug(name);
+    }
     if (description) updateData.description = description.trim();
     if (price !== undefined) updateData.price = parseFloat(price);
     if (req.body.comparePrice !== undefined) {
       updateData.comparePrice = req.body.comparePrice ? parseFloat(req.body.comparePrice) : null;
     }
-    if (category) updateData.category = category;
-    if (stock !== undefined) updateData.stock = parseInt(stock);
+    if (category) updateData.categoryId = category;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map(file => `/uploads/products/${file.filename}`);
-      updateData.images = [...existingProduct.images, ...newImages];
+      const newImagesUrls = getFilesUrls(req.files, 'products');
+
+      // Get current max position
+      const currentImages = await prisma.productImage.findMany({
+        where: { productId: id },
+        orderBy: { position: 'desc' },
+        take: 1
+      });
+      const startPos = currentImages.length > 0 ? currentImages[0].position + 1 : 0;
+
+      updateData.images = {
+        create: newImagesUrls.map((url, index) => ({
+          imagePath: url,
+          position: startPos + index,
+          isPrimary: startPos === 0 && index === 0
+        }))
+      };
+    }
+
+    if (stock !== undefined) {
+      // Update stock of the first variant or create one if missing
+      const firstVariant = await prisma.productVariant.findFirst({
+        where: { productId: id }
+      });
+
+      if (firstVariant) {
+        await prisma.productVariant.update({
+          where: { id: firstVariant.id },
+          data: { stock: parseInt(stock) }
+        });
+      } else {
+        updateData.variants = {
+          create: {
+            size: 'Free Size',
+            color: 'Default',
+            stock: parseInt(stock) || 0
+          }
+        };
+      }
     }
 
     if (req.body.collections) {
       updateData.collections = {
-        set: req.body.collections.map(id => ({ id }))
+        set: Array.isArray(req.body.collections)
+          ? req.body.collections.map(id => ({ id }))
+          : [{ id: req.body.collections }]
       };
     }
 
@@ -320,7 +381,9 @@ const updateProduct = async (req, res, next) => {
             id: true,
             name: true
           }
-        }
+        },
+        images: true,
+        variants: true
       }
     });
 

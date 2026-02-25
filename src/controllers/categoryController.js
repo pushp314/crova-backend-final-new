@@ -1,5 +1,7 @@
 const prisma = require('../config/database');
 const AppError = require('../utils/AppError');
+const { getFileUrl } = require('../utils/fileUpload');
+const { generateSlug } = require('../utils/helpers');
 
 // Get all categories
 const getCategories = async (req, res, next) => {
@@ -88,8 +90,8 @@ const createCategory = async (req, res, next) => {
     const { name, description } = req.body;
 
     // Check if category already exists
-    const existingCategory = await prisma.category.findUnique({
-      where: { name: name.trim() }
+    const existingCategory = await prisma.category.findFirst({
+      where: { name: { equals: name.trim(), mode: 'insensitive' } }
     });
 
     if (existingCategory) {
@@ -97,11 +99,13 @@ const createCategory = async (req, res, next) => {
     }
 
     // Handle image upload
-    const image = req.file ? `/uploads/categories/${req.file.filename}` : null;
+    const image = getFileUrl(req.file, 'categories');
+    const slug = generateSlug(name);
 
     const category = await prisma.category.create({
       data: {
         name: name.trim(),
+        slug: slug,
         description: description?.trim(),
         image
       }
@@ -133,8 +137,8 @@ const updateCategory = async (req, res, next) => {
 
     // Check if name is being changed and if it already exists
     if (name && name.trim() !== existingCategory.name) {
-      const nameExists = await prisma.category.findUnique({
-        where: { name: name.trim() }
+      const nameExists = await prisma.category.findFirst({
+        where: { name: { equals: name.trim(), mode: 'insensitive' } }
       });
 
       if (nameExists) {
@@ -144,13 +148,16 @@ const updateCategory = async (req, res, next) => {
 
     // Prepare update data
     const updateData = {};
-    if (name) updateData.name = name.trim();
+    if (name) {
+      updateData.name = name.trim();
+      updateData.slug = generateSlug(name);
+    }
     if (description !== undefined) updateData.description = description?.trim();
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
 
     // Handle image upload
     if (req.file) {
-      updateData.image = `/uploads/categories/${req.file.filename}`;
+      updateData.image = getFileUrl(req.file, 'categories');
     }
 
     const category = await prisma.category.update({
