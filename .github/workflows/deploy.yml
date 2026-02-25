@@ -19,7 +19,19 @@ jobs:
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           cd /var/www/crova/backend
-          git pull origin main
-          npm install
-          npx prisma db push
-          pm2 restart crova-api
+          
+          echo "Resetting local changes..."
+          git fetch --all
+          git reset --hard origin/main
+          
+          echo "Installing dependencies..."
+          npm install --production
+          
+          echo "Running Prisma migrations..."
+          npx prisma generate
+          npx prisma migrate deploy
+          
+          echo "Restarting application..."
+          # Restart using the name defined in ecosystem.config.json
+          pm2 restart crova-backend || pm2 start ecosystem.config.json --env production
+          pm2 save
