@@ -2,7 +2,7 @@ const path = require('path');
 
 /**
  * Extracts the file path or URL from a multer file object.
- * Works for both diskStorage and multerS3 (Cloudflare R2).
+ * Works for diskStorage.
  * 
  * @param {Object} file - The multer file object
  * @param {string} folder - The fallback folder name for local storage
