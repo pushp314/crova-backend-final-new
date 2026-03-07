@@ -13,6 +13,9 @@ const { generalLimiter } = require('./src/middleware/rateLimiter');
 // Load environment variables
 dotenv.config();
 
+// BigInt Serialization Fix for Prisma Raw Queries
+BigInt.prototype.toJSON = function () { return this.toString() };
+
 // Passport configuration
 require('./src/config/passport');
 

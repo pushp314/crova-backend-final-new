@@ -245,8 +245,8 @@ const createProduct = async (req, res, next) => {
         name: name.trim(),
         slug: slug,
         description: description.trim(),
-        price: parseFloat(price),
-        comparePrice: req.body.comparePrice ? parseFloat(req.body.comparePrice) : null,
+        price: (price && price !== "") ? parseFloat(price) : 0,
+        comparePrice: (req.body.comparePrice && req.body.comparePrice !== "") ? parseFloat(req.body.comparePrice) : null,
         categoryId: category,
         variants: {
           create: sizeList.length > 0
@@ -344,9 +344,9 @@ const updateProduct = async (req, res, next) => {
       updateData.slug = generateSlug(name);
     }
     if (description) updateData.description = description.trim();
-    if (price !== undefined) updateData.price = parseFloat(price);
+    if (price !== undefined && price !== "") updateData.price = parseFloat(price);
     if (req.body.comparePrice !== undefined) {
-      updateData.comparePrice = req.body.comparePrice ? parseFloat(req.body.comparePrice) : null;
+      updateData.comparePrice = (req.body.comparePrice && req.body.comparePrice !== "") ? parseFloat(req.body.comparePrice) : null;
     }
     if (category) updateData.categoryId = category;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);

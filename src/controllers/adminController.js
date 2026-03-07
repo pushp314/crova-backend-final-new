@@ -87,24 +87,24 @@ const getSalesAnalytics = async (req, res, next) => {
     const days = parseInt(period) || 30;
 
     // Daily Revenue (Last N days)
-    const dailyRevenue = await prisma.$queryRaw`
+    const dailyRevenueResult = await prisma.$queryRaw`
       SELECT 
         DATE("createdAt") as date,
-        SUM("totalAmount") as revenue,
-        COUNT(*) as orders
+        CAST(SUM("totalAmount") AS FLOAT) as revenue,
+        CAST(COUNT(*) AS INTEGER) as orders
       FROM "Order"
       WHERE ("paymentStatus" = 'SUCCESS' OR "status" IN ('PAID', 'DELIVERED'))
-      AND "createdAt" >= NOW() - INTERVAL '${days} days'
+      AND "createdAt" >= NOW() - (INTERVAL '1 day' * ${days}::int)
       GROUP BY DATE("createdAt")
       ORDER BY date ASC;
     `;
 
     // Monthly Revenue
-    const monthlyRevenue = await prisma.$queryRaw`
+    const monthlyRevenueResult = await prisma.$queryRaw`
       SELECT 
         DATE_TRUNC('month', "createdAt") as month,
-        SUM("totalAmount") as revenue,
-        COUNT(*) as orders
+        CAST(SUM("totalAmount") AS FLOAT) as revenue,
+        CAST(COUNT(*) AS INTEGER) as orders
       FROM "Order"
       WHERE ("paymentStatus" = 'SUCCESS' OR "status" IN ('PAID', 'DELIVERED'))
       GROUP BY month
@@ -156,12 +156,12 @@ const getSalesAnalytics = async (req, res, next) => {
     res.json({
       success: true,
       analytics: {
-        dailyRevenue,
-        monthlyRevenue,
+        dailyRevenue: dailyRevenueResult,
+        monthlyRevenue: monthlyRevenueResult,
         topProducts: topProductsWithDetails,
         ordersByStatus: ordersByStatus.map((o) => ({
           status: o.status,
-          count: o._count._all,
+          count: Number(o._count._all),
         })),
       },
     });
