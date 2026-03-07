@@ -16,22 +16,10 @@ jobs:
         username: ${{ secrets.VPS_USERNAME }}
         key: ${{ secrets.VPS_SSH_KEY }}
         script: |
-          export NVM_DIR="$HOME/.nvm"
-          [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-          cd /var/www/crova/backend
-          
-          echo "Resetting local changes..."
-          git fetch --all
-          git reset --hard origin/main
-          
-          echo "Installing dependencies..."
-          npm install --production
-          
-          echo "Running Prisma migrations..."
-          npx prisma generate
-          npx prisma migrate deploy
-          
-          echo "Restarting application..."
-          # Restart using the name defined in ecosystem.config.json
-          pm2 restart crova-backend || pm2 start ecosystem.config.json --env production
-          pm2 save
+          script: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            cd /var/www/crova
+            
+            # Using the robust update script for handling .env and deployments
+            bash update.sh
