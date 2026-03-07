@@ -236,29 +236,32 @@ const createProduct = async (req, res, next) => {
       try {
         sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
       } catch (e) {
-        sizeList = [sizes]; // Single string fallback
+        sizeList = (typeof sizes === 'string' && sizes.trim() !== '') ? [sizes] : [];
       }
     }
+
+    const parsedStock = parseInt(stock);
+    const finalStock = isNaN(parsedStock) ? 0 : parsedStock;
 
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
         slug: slug,
         description: description.trim(),
-        price: (price && price !== "") ? parseFloat(price) : 0,
-        comparePrice: (req.body.comparePrice && req.body.comparePrice !== "") ? parseFloat(req.body.comparePrice) : null,
+        price: (price && price !== "" && !isNaN(parseFloat(price))) ? parseFloat(price) : 0,
+        comparePrice: (req.body.comparePrice && req.body.comparePrice !== "" && !isNaN(parseFloat(req.body.comparePrice))) ? parseFloat(req.body.comparePrice) : null,
         categoryId: category,
         variants: {
           create: sizeList.length > 0
             ? sizeList.map(size => ({
               size,
               color: 'Default',
-              stock: parseInt(stock) || 0
+              stock: finalStock
             }))
             : [{
               size: 'Free Size',
               color: 'Default',
-              stock: parseInt(stock) || 0
+              stock: finalStock
             }]
         },
         images: {
@@ -344,9 +347,13 @@ const updateProduct = async (req, res, next) => {
       updateData.slug = generateSlug(name);
     }
     if (description) updateData.description = description.trim();
-    if (price !== undefined && price !== "") updateData.price = parseFloat(price);
+    if (price !== undefined && price !== "") {
+      const p = parseFloat(price);
+      if (!isNaN(p)) updateData.price = p;
+    }
     if (req.body.comparePrice !== undefined) {
-      updateData.comparePrice = (req.body.comparePrice && req.body.comparePrice !== "") ? parseFloat(req.body.comparePrice) : null;
+      const cp = parseFloat(req.body.comparePrice);
+      updateData.comparePrice = (req.body.comparePrice && req.body.comparePrice !== "" && !isNaN(cp)) ? cp : null;
     }
     if (category) updateData.categoryId = category;
     if (isActive !== undefined) updateData.isActive = Boolean(isActive);
@@ -378,12 +385,15 @@ const updateProduct = async (req, res, next) => {
         try {
           sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
         } catch (e) {
-          sizeList = [sizes];
+          sizeList = (typeof sizes === 'string' && sizes.trim() !== '') ? [sizes] : [];
         }
       } else {
         // If sizes not provided but stock is, use existing sizes
         sizeList = existingProduct.variants.map(v => v.size);
       }
+
+      const parsedStock = parseInt(stock);
+      const finalStock = isNaN(parsedStock) ? (existingProduct.variants[0]?.stock || 0) : parsedStock;
 
       if (sizeList.length > 0) {
         // Delete old variants and create new ones for simplicity in this flat-stock model
@@ -395,7 +405,7 @@ const updateProduct = async (req, res, next) => {
           create: sizeList.map(size => ({
             size,
             color: 'Default',
-            stock: parseInt(stock) || (existingProduct.variants[0]?.stock || 0)
+            stock: finalStock
           }))
         };
       } else if (stock !== undefined) {
@@ -404,9 +414,10 @@ const updateProduct = async (req, res, next) => {
         if (firstVariant) {
           await prisma.productVariant.update({
             where: { id: firstVariant.id },
-            data: { stock: parseInt(stock) }
+            data: { stock: finalStock }
           });
-        } else {
+        }
+        else {
           updateData.variants = {
             create: {
               size: 'Free Size',
