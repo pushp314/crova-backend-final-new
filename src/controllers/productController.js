@@ -217,7 +217,7 @@ const getProduct = async (req, res, next) => {
 // Create product (Admin only)
 const createProduct = async (req, res, next) => {
   try {
-    const { name, description, price, category, stock } = req.body;
+    const { name, description, price, category, stock, sizes } = req.body;
 
     const categoryExists = await prisma.category.findUnique({
       where: { id: category }
@@ -230,6 +230,16 @@ const createProduct = async (req, res, next) => {
     const images = getFilesUrls(req.files, 'products');
     const slug = generateSlug(name);
 
+    // Support both array and JSON string (if sent via FormData)
+    let sizeList = [];
+    if (sizes) {
+      try {
+        sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
+      } catch (e) {
+        sizeList = [sizes]; // Single string fallback
+      }
+    }
+
     const product = await prisma.product.create({
       data: {
         name: name.trim(),
@@ -239,11 +249,17 @@ const createProduct = async (req, res, next) => {
         comparePrice: req.body.comparePrice ? parseFloat(req.body.comparePrice) : null,
         categoryId: category,
         variants: {
-          create: {
-            size: 'Free Size', // Default variant
-            color: 'Default',
-            stock: parseInt(stock) || 0
-          }
+          create: sizeList.length > 0
+            ? sizeList.map(size => ({
+              size,
+              color: 'Default',
+              stock: parseInt(stock) || 0
+            }))
+            : [{
+              size: 'Free Size',
+              color: 'Default',
+              stock: parseInt(stock) || 0
+            }]
         },
         images: {
           create: images.map((url, index) => ({
@@ -301,10 +317,11 @@ const createProduct = async (req, res, next) => {
 const updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, description, price, category, stock, isActive } = req.body;
+    const { name, description, price, category, stock, isActive, sizes } = req.body;
 
     const existingProduct = await prisma.product.findUnique({
-      where: { id }
+      where: { id },
+      include: { variants: true }
     });
 
     if (!existingProduct) {
@@ -354,25 +371,50 @@ const updateProduct = async (req, res, next) => {
       };
     }
 
-    if (stock !== undefined) {
-      // Update stock of the first variant or create one if missing
-      const firstVariant = await prisma.productVariant.findFirst({
-        where: { productId: id }
-      });
-
-      if (firstVariant) {
-        await prisma.productVariant.update({
-          where: { id: firstVariant.id },
-          data: { stock: parseInt(stock) }
-        });
+    // Handle Sizes and Stock
+    if (sizes || stock !== undefined) {
+      let sizeList = [];
+      if (sizes) {
+        try {
+          sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
+        } catch (e) {
+          sizeList = [sizes];
+        }
       } else {
+        // If sizes not provided but stock is, use existing sizes
+        sizeList = existingProduct.variants.map(v => v.size);
+      }
+
+      if (sizeList.length > 0) {
+        // Delete old variants and create new ones for simplicity in this flat-stock model
+        await prisma.productVariant.deleteMany({
+          where: { productId: id }
+        });
+
         updateData.variants = {
-          create: {
-            size: 'Free Size',
+          create: sizeList.map(size => ({
+            size,
             color: 'Default',
-            stock: parseInt(stock) || 0
-          }
+            stock: parseInt(stock) || (existingProduct.variants[0]?.stock || 0)
+          }))
         };
+      } else if (stock !== undefined) {
+        // If no sizes but stock is updated, update first variant or create Free Size
+        const firstVariant = existingProduct.variants[0];
+        if (firstVariant) {
+          await prisma.productVariant.update({
+            where: { id: firstVariant.id },
+            data: { stock: parseInt(stock) }
+          });
+        } else {
+          updateData.variants = {
+            create: {
+              size: 'Free Size',
+              color: 'Default',
+              stock: parseInt(stock) || 0
+            }
+          };
+        }
       }
     }
 
