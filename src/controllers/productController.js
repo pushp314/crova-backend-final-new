@@ -271,11 +271,11 @@ const createProduct = async (req, res, next) => {
             isPrimary: index === 0
           }))
         },
-        collections: req.body.collections ? {
-          connect: Array.isArray(req.body.collections)
-            ? req.body.collections.map(id => ({ id }))
-            : [{ id: req.body.collections }]
-        } : undefined
+        collections: collectionsField ? {
+          connect: Array.isArray(collectionsField)
+            ? collectionsField.map(id => ({ id }))
+            : [{ id: collectionsField }]
+        } : undefined,
       },
       include: {
         category: {
@@ -378,7 +378,18 @@ const updateProduct = async (req, res, next) => {
       };
     }
 
-    // Handle Sizes and Stock
+    // Handle Collections
+    const collectionsField = req.body.collections || req.body['collections[]'];
+    if (collectionsField) {
+      updateData.collections = {
+        set: Array.isArray(collectionsField)
+          ? collectionsField.map(id => ({ id }))
+          : [{ id: collectionsField }]
+      };
+    }
+
+    // Handle Sizes and Stock (Safe Sync Strategy)
+    const variantsUpdate = {};
     if (sizes || stock !== undefined) {
       let sizeList = [];
       if (sizes) {
@@ -388,7 +399,6 @@ const updateProduct = async (req, res, next) => {
           sizeList = (typeof sizes === 'string' && sizes.trim() !== '') ? [sizes] : [];
         }
       } else {
-        // If sizes not provided but stock is, use existing sizes
         sizeList = existingProduct.variants.map(v => v.size);
       }
 
@@ -396,45 +406,63 @@ const updateProduct = async (req, res, next) => {
       const finalStock = isNaN(parsedStock) ? (existingProduct.variants[0]?.stock || 0) : parsedStock;
 
       if (sizeList.length > 0) {
-        // Delete old variants and create new ones for simplicity in this flat-stock model
-        await prisma.productVariant.deleteMany({
-          where: { productId: id }
+        // Find variants to keep/update and ones to potentially delete
+        const existingSizes = existingProduct.variants.reduce((acc, v) => {
+          acc[v.size] = v.id;
+          return acc;
+        }, {});
+
+        // Build atomic operations
+        const toCreate = [];
+        const toUpdate = [];
+        const preservedSizeIds = [];
+
+        sizeList.forEach(size => {
+          if (existingSizes[size]) {
+            toUpdate.push({
+              where: { id: existingSizes[size] },
+              data: { stock: finalStock }
+            });
+            preservedSizeIds.push(existingSizes[size]);
+          } else {
+            toCreate.push({
+              size,
+              color: 'Default',
+              stock: finalStock
+            });
+          }
         });
 
+        // Delete only those not in the new list (this might still fail if in order, but it's more specific)
+        const toDeleteIds = existingProduct.variants
+          .filter(v => !preservedSizeIds.includes(v.id))
+          .map(v => v.id);
+
         updateData.variants = {
-          create: sizeList.map(size => ({
-            size,
-            color: 'Default',
-            stock: finalStock
-          }))
+          update: toUpdate,
+          create: toCreate,
+          // Safely attempt deletion of unused variants
+          deleteMany: toDeleteIds.length > 0 ? { id: { in: toDeleteIds } } : undefined
         };
       } else if (stock !== undefined) {
-        // If no sizes but stock is updated, update first variant or create Free Size
         const firstVariant = existingProduct.variants[0];
         if (firstVariant) {
-          await prisma.productVariant.update({
-            where: { id: firstVariant.id },
-            data: { stock: finalStock }
-          });
-        }
-        else {
+          updateData.variants = {
+            update: {
+              where: { id: firstVariant.id },
+              data: { stock: finalStock }
+            }
+          };
+        } else {
           updateData.variants = {
             create: {
               size: 'Free Size',
               color: 'Default',
-              stock: parseInt(stock) || 0
+              stock: finalStock
             }
           };
         }
       }
-    }
-
-    if (req.body.collections) {
-      updateData.collections = {
-        set: Array.isArray(req.body.collections)
-          ? req.body.collections.map(id => ({ id }))
-          : [{ id: req.body.collections }]
-      };
     }
 
     const product = await prisma.product.update({
