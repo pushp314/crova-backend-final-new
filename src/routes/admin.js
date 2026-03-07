@@ -15,7 +15,8 @@ const {
   getLowStockProducts,
   getCustomDesignOrders,
   adminSearch,
-  getAuditLogs
+  getAuditLogs,
+  deleteOrder
 } = require('../controllers/adminController');
 const { authenticateToken, requireAdmin } = require('../middleware/auth');
 
