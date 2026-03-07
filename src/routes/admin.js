@@ -35,6 +35,7 @@ router.get('/orders', getOrders);
 router.get('/orders/custom-designs', getCustomDesignOrders);
 router.get('/orders/:id', getOrderDetail);
 router.put('/orders/:id/status', updateOrderStatus);
+router.delete('/orders/:id', deleteOrder);
 
 // User management
 router.get('/users', getUsers);

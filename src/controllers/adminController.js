@@ -23,7 +23,12 @@ const getDashboardStats = async (req, res, next) => {
     ] = await Promise.all([
       // Total Revenue
       prisma.order.aggregate({
-        where: { paymentStatus: 'SUCCESS' },
+        where: {
+          OR: [
+            { paymentStatus: 'SUCCESS' },
+            { status: { in: ['PAID', 'DELIVERED'] } }
+          ]
+        },
         _sum: { totalAmount: true },
       }),
       // Total Orders
@@ -88,7 +93,7 @@ const getSalesAnalytics = async (req, res, next) => {
         SUM("totalAmount") as revenue,
         COUNT(*) as orders
       FROM "Order"
-      WHERE "paymentStatus" = 'SUCCESS'
+      WHERE ("paymentStatus" = 'SUCCESS' OR "status" IN ('PAID', 'DELIVERED'))
       AND "createdAt" >= NOW() - INTERVAL '${days} days'
       GROUP BY DATE("createdAt")
       ORDER BY date ASC;
@@ -101,7 +106,7 @@ const getSalesAnalytics = async (req, res, next) => {
         SUM("totalAmount") as revenue,
         COUNT(*) as orders
       FROM "Order"
-      WHERE "paymentStatus" = 'SUCCESS'
+      WHERE ("paymentStatus" = 'SUCCESS' OR "status" IN ('PAID', 'DELIVERED'))
       GROUP BY month
       ORDER BY month DESC
       LIMIT 12;
@@ -266,9 +271,14 @@ const updateOrderStatus = async (req, res, next) => {
       return next(new AppError('Invalid status', 400));
     }
 
+    const updateData = { status };
+    if (status === 'PAID' || status === 'DELIVERED') {
+      updateData.paymentStatus = 'SUCCESS';
+    }
+
     const order = await prisma.order.update({
       where: { id },
-      data: { status },
+      data: updateData,
       include: {
         user: { select: { id: true, name: true, email: true } },
       },
@@ -586,6 +596,16 @@ const getAuditLogs = async (req, res, next) => {
   }
 };
 
+const deleteOrder = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await prisma.order.delete({ where: { id } });
+    res.json({ success: true, message: 'Order deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getSalesAnalytics,
@@ -599,5 +619,6 @@ module.exports = {
   getLowStockProducts,
   getCustomDesignOrders,
   adminSearch,
-  getAuditLogs
+  getAuditLogs,
+  deleteOrder
 };
