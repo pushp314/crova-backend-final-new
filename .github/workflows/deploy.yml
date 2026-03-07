@@ -19,5 +19,5 @@ jobs:
           export NVM_DIR="$HOME/.nvm"
           [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
           cd /var/www/crova/backend
-          # Run the freshly pulled update script from the backend repo
+          git fetch origin main && git reset --hard origin/main
           bash update.sh
