@@ -50,6 +50,7 @@ const formatCartResponse = (cart) => {
       id: item.id,
       variantId: item.variantId,
       quantity: item.quantity,
+      customColor: item.customColor,
       variant: {
         id: item.variant.id,
         size: item.variant.size,
@@ -97,7 +98,7 @@ const getCart = async (req, res, next) => {
 const addToCart = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { variantId, quantity } = req.body;
+    const { variantId, quantity, customColor } = req.body;
 
     // Validate quantity
     if (!quantity || quantity < 1) {
@@ -141,9 +142,10 @@ const addToCart = async (req, res, next) => {
     // Check if item already exists in cart (using correct unique constraint)
     const existingItem = await prisma.cartItem.findUnique({
       where: {
-        cartId_variantId: {
+        cartId_variantId_customColor: {
           cartId: cart.id,
-          variantId
+          variantId,
+          customColor: customColor || null
         }
       }
     });
@@ -166,7 +168,8 @@ const addToCart = async (req, res, next) => {
         data: {
           cartId: cart.id,
           variantId,
-          quantity
+          quantity,
+          customColor: customColor || null
         }
       });
     }
@@ -193,7 +196,7 @@ const addToCart = async (req, res, next) => {
 const updateCartItem = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { variantId, quantity } = req.body;
+    const { variantId, quantity, customColor } = req.body;
 
     if (quantity <= 0) {
       return next(new AppError('Quantity must be greater than 0', 400));
@@ -232,9 +235,10 @@ const updateCartItem = async (req, res, next) => {
     // Update cart item
     const cartItem = await prisma.cartItem.findUnique({
       where: {
-        cartId_variantId: {
+        cartId_variantId_customColor: {
           cartId: cart.id,
-          variantId
+          variantId,
+          customColor: customColor || null
         }
       }
     });
@@ -285,7 +289,8 @@ const removeFromCart = async (req, res, next) => {
     const deletedItem = await prisma.cartItem.deleteMany({
       where: {
         cartId: cart.id,
-        variantId
+        variantId,
+        customColor: req.query.customColor || null
       }
     });
 

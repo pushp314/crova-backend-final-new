@@ -5,7 +5,7 @@ const { getFilesUrls } = require('../utils/fileUpload');
 
 const submitInquiry = async (req, res, next) => {
     try {
-        const { name, email, phone, description } = req.body;
+        const { name, email, phone, description, customColor } = req.body;
         const files = req.files || [];
 
         const images = getFilesUrls(files, 'designs');
@@ -17,6 +17,7 @@ const submitInquiry = async (req, res, next) => {
                 phone,
                 description,
                 images,
+                customColor,
                 status: 'PENDING',
                 userId: req.user?.id || null // Capture User ID if available
             }

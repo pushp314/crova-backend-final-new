@@ -162,7 +162,8 @@ const createOrder = async (req, res, next) => {
       orderItemsData.push({
         variantId: item.variantId,
         quantity: item.quantity,
-        price: variant.product.price
+        price: variant.product.price,
+        customColor: item.customColor || null
       });
     }
 

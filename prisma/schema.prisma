@@ -232,8 +232,9 @@ model CartItem {
   variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 
   quantity    Int
+  customColor String?
 
-  @@unique([cartId, variantId])
+  @@unique([cartId, variantId, customColor])
   @@index([cartId])
 }
 
@@ -277,6 +278,7 @@ model OrderItem {
 
   quantity  Int
   price     Decimal  @db.Decimal(10, 2)
+  customColor String?
 
   @@index([orderId])
 }
@@ -318,6 +320,7 @@ model DesignInquiry {
   phone       String?
   description String
   images      String[]
+  customColor String? // Added for color selection from palette
   status      String   @default("PENDING")
   
   adminReply      String?
