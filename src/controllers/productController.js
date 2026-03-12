@@ -217,7 +217,7 @@ const getProduct = async (req, res, next) => {
 // Create product (Admin only)
 const createProduct = async (req, res, next) => {
   try {
-    const { name, description, price, category, stock, sizes } = req.body;
+    const { name, description, price, category, stock, sizes, colors } = req.body;
 
     const categoryExists = await prisma.category.findUnique({
       where: { id: category }
@@ -230,18 +230,36 @@ const createProduct = async (req, res, next) => {
     const images = getFilesUrls(req.files, 'products');
     const slug = generateSlug(name);
 
-    // Support both array and JSON string (if sent via FormData)
+    // Parse sizes and colors
     let sizeList = [];
-    if (sizes) {
-      try {
-        sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
-      } catch (e) {
-        sizeList = (typeof sizes === 'string' && sizes.trim() !== '') ? [sizes] : [];
-      }
+    let colorList = [];
+    try {
+      sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes || '[]');
+      colorList = Array.isArray(colors) ? colors : JSON.parse(colors || '[]');
+    } catch (e) {
+      logger.error('Error parsing sizes/colors', e);
     }
+
+    // Ensure we have at least one variant
+    if (sizeList.length === 0) sizeList = ['Free Size'];
+    if (colorList.length === 0) colorList = ['Default'];
 
     const parsedStock = parseInt(stock);
     const finalStock = isNaN(parsedStock) ? 0 : parsedStock;
+
+    // Create all combinations of Size x Color
+    const variantData = [];
+    sizeList.forEach(size => {
+      colorList.forEach(color => {
+        variantData.push({
+          size,
+          color,
+          stock: finalStock
+        });
+      });
+    });
+
+    const collectionsField = req.body.collections || req.body['collections[]'];
 
     const product = await prisma.product.create({
       data: {
@@ -252,17 +270,7 @@ const createProduct = async (req, res, next) => {
         comparePrice: (req.body.comparePrice && req.body.comparePrice !== "" && !isNaN(parseFloat(req.body.comparePrice))) ? parseFloat(req.body.comparePrice) : null,
         categoryId: category,
         variants: {
-          create: sizeList.length > 0
-            ? sizeList.map(size => ({
-              size,
-              color: 'Default',
-              stock: finalStock
-            }))
-            : [{
-              size: 'Free Size',
-              color: 'Default',
-              stock: finalStock
-            }]
+          create: variantData
         },
         images: {
           create: images.map((url, index) => ({
@@ -271,7 +279,7 @@ const createProduct = async (req, res, next) => {
             isPrimary: index === 0
           }))
         },
-        collections: collectionsField ? {
+        collections: (collectionsField && (Array.isArray(collectionsField) ? collectionsField.length > 0 : true)) ? {
           connect: Array.isArray(collectionsField)
             ? collectionsField.map(id => ({ id }))
             : [{ id: collectionsField }]
@@ -388,80 +396,83 @@ const updateProduct = async (req, res, next) => {
       };
     }
 
-    // Handle Sizes and Stock (Safe Sync Strategy)
-    const variantsUpdate = {};
-    if (sizes || stock !== undefined) {
+    // Handle Sizes and Stock (Updated for Color x Size sync)
+    if (req.body.sizes || req.body.colors || stock !== undefined) {
+      const { sizes, colors } = req.body;
+
       let sizeList = [];
-      if (sizes) {
-        try {
-          sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
-        } catch (e) {
-          sizeList = (typeof sizes === 'string' && sizes.trim() !== '') ? [sizes] : [];
-        }
-      } else {
+      let colorList = [];
+      try {
+        sizeList = Array.isArray(sizes) ? sizes : JSON.parse(sizes || '[]');
+        colorList = Array.isArray(colors) ? colors : JSON.parse(colors || '[]');
+      } catch (e) {
         sizeList = existingProduct.variants.map(v => v.size);
+        colorList = existingProduct.variants.map(v => v.color);
       }
+
+      if (sizeList.length === 0) sizeList = ['Free Size'];
+      if (colorList.length === 0) colorList = ['Default'];
 
       const parsedStock = parseInt(stock);
       const finalStock = isNaN(parsedStock) ? (existingProduct.variants[0]?.stock || 0) : parsedStock;
 
-      if (sizeList.length > 0) {
-        // Find variants to keep/update and ones to potentially delete
-        const existingSizes = existingProduct.variants.reduce((acc, v) => {
-          acc[v.size] = v.id;
-          return acc;
-        }, {});
+      // Group existing variants by key for sync
+      const existingVariantsByKey = existingProduct.variants.reduce((acc, v) => {
+        acc[`${v.size}-${v.color}`] = v.id;
+        return acc;
+      }, {});
 
-        // Build atomic operations
-        const toCreate = [];
-        const toUpdate = [];
-        const preservedSizeIds = [];
+      const toCreate = [];
+      const toUpdate = [];
+      const usedVariantIds = [];
 
-        sizeList.forEach(size => {
-          if (existingSizes[size]) {
+      sizeList.forEach(size => {
+        colorList.forEach(color => {
+          const key = `${size}-${color}`;
+          if (existingVariantsByKey[key]) {
             toUpdate.push({
-              where: { id: existingSizes[size] },
+              where: { id: existingVariantsByKey[key] },
               data: { stock: finalStock }
             });
-            preservedSizeIds.push(existingSizes[size]);
+            usedVariantIds.push(existingVariantsByKey[key]);
           } else {
-            toCreate.push({
-              size,
-              color: 'Default',
-              stock: finalStock
-            });
+            toCreate.push({ size, color, stock: finalStock });
           }
         });
+      });
 
-        // Delete only those not in the new list (this might still fail if in order, but it's more specific)
-        const toDeleteIds = existingProduct.variants
-          .filter(v => !preservedSizeIds.includes(v.id))
-          .map(v => v.id);
+      const toDeleteIds = existingProduct.variants
+        .filter(v => !usedVariantIds.includes(v.id))
+        .map(v => v.id);
 
-        updateData.variants = {
-          update: toUpdate,
-          create: toCreate,
-          // Safely attempt deletion of unused variants
-          deleteMany: toDeleteIds.length > 0 ? { id: { in: toDeleteIds } } : undefined
-        };
-      } else if (stock !== undefined) {
-        const firstVariant = existingProduct.variants[0];
-        if (firstVariant) {
-          updateData.variants = {
-            update: {
-              where: { id: firstVariant.id },
-              data: { stock: finalStock }
-            }
-          };
-        } else {
-          updateData.variants = {
-            create: {
-              size: 'Free Size',
-              color: 'Default',
-              stock: finalStock
-            }
-          };
-        }
+      // Critical: Check which variants can be safely deleted (no orders)
+      const variantsWithOrders = await prisma.orderItem.findMany({
+        where: { variantId: { in: toDeleteIds } },
+        select: { variantId: true }
+      });
+      const orderLinkedVariantIds = new Set(variantsWithOrders.map(v => v.variantId));
+      
+      const safeToDeleteIds = toDeleteIds.filter(id => !orderLinkedVariantIds.has(id));
+      const unsafeToDeleteIds = toDeleteIds.filter(id => orderLinkedVariantIds.has(id));
+
+      updateData.variants = {
+        update: toUpdate,
+        create: toCreate,
+        deleteMany: safeToDeleteIds.length > 0 ? { id: { in: safeToDeleteIds } } : undefined
+      };
+
+      // For unsafe variants, just set stock to 0 so they don't impact inventory logic
+      if (unsafeToDeleteIds.length > 0) {
+        // We can't do this easily inside the same 'update' due to Prisma nested limits sometimes, 
+        // but we can add them to toUpdate
+        unsafeToDeleteIds.forEach(vid => {
+          toUpdate.push({
+            where: { id: vid },
+            data: { stock: 0 }
+          });
+        });
+        // Refresh the variants update with the expanded list
+        updateData.variants.update = toUpdate;
       }
     }
 
@@ -514,28 +525,48 @@ const deleteProduct = async (req, res, next) => {
     const { id } = req.params;
 
     const product = await prisma.product.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        variants: {
+          include: { _count: { select: { orderItems: true } } }
+        }
+      }
     });
 
     if (!product) {
       return next(new AppError('Product not found', 404));
     }
 
-    await prisma.product.update({
-      where: { id },
-      data: { isActive: false }
+    // Check if any variant has orders
+    const hasOrders = product.variants.some(v => v._count.orderItems > 0);
+
+    if (hasOrders) {
+      // Soft delete if there are orders
+      await prisma.product.update({
+        where: { id },
+        data: { isActive: false }
+      });
+
+      return res.json({
+        success: true,
+        message: 'Product archived (not deleted permanently because it exists in past orders)'
+      });
+    }
+
+    // Hard delete if no orders
+    await prisma.product.delete({
+      where: { id }
     });
 
     // Invalidate caches
     if (cache) {
       await cache.del(`product:${id}`);
       await cache.delByPattern('products:*');
-      logger.debug(`Invalidated cache for deleted product ${id}`);
     }
 
     res.json({
       success: true,
-      message: 'Product deleted successfully'
+      message: 'Product deleted permanently'
     });
   } catch (error) {
     next(error);
@@ -659,12 +690,39 @@ const bulkAction = async (req, res, next) => {
         });
         break;
       case 'delete':
-        // Soft delete
-        result = await prisma.product.updateMany({
-          where: { id: { in: ids } },
-          data: { isActive: false }
+        // Attempt hard delete for products without orders, soft delete for others
+        let deletedCount = 0;
+        let archivedCount = 0;
+
+        for (const id of ids) {
+          try {
+            const p = await prisma.product.findUnique({
+              where: { id },
+              include: { variants: { include: { _count: { select: { orderItems: true } } } } }
+            });
+
+            if (!p) continue;
+
+            const hasOrders = p.variants.some(v => v._count.orderItems > 0);
+            if (hasOrders) {
+              await prisma.product.update({
+                where: { id },
+                data: { isActive: false }
+              });
+              archivedCount++;
+            } else {
+              await prisma.product.delete({ where: { id } });
+              deletedCount++;
+            }
+          } catch (err) {
+            logger.error(`Error in bulk delete for product ${id}`, err);
+          }
+        }
+
+        return res.json({
+          success: true,
+          message: `Bulk deletion complete: ${deletedCount} deleted permanently, ${archivedCount} archived due to existing orders.`
         });
-        break;
       default:
         return next(new AppError('Invalid bulk action', 400));
     }

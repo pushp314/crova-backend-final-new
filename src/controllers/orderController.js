@@ -46,14 +46,12 @@ const getOrders = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: {
-        orders,
-        pagination: {
-          page,
-          limit,
-          total: totalOrders,
-          pages: Math.ceil(totalOrders / limit)
-        }
+      orders,
+      pagination: {
+        page,
+        limit,
+        total: totalOrders,
+        pages: Math.ceil(totalOrders / limit)
       }
     });
   } catch (error) {
@@ -98,7 +96,7 @@ const getOrder = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: { order }
+      order
     });
   } catch (error) {
     next(error);
